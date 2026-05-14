@@ -1,19 +1,17 @@
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { revalidatePath } from 'next/cache';
 import MaterialDisplay from './MaterialDisplay';
 
 export default async function SubjectPage({ params }) {
   const { slug } = await params;
   const subjectName = slug.replaceAll('-', ' ');
 
-  // Fetch approved files and order by highest lifesaver score first
+  // Fetch approved files - Order by date since upvotes are removed
   const { data: uploadedFiles } = await supabase
     .from('materials')
     .select('*')
     .eq('subject', slug)
     .eq('status', 'approved')
-    .order('lifesavers', { ascending: false })
     .order('created_at', { ascending: false });
 
   // Attach public URLs
@@ -21,14 +19,6 @@ export default async function SubjectPage({ params }) {
     const { data } = supabase.storage.from('vault').getPublicUrl(file.file_path);
     return { ...file, publicUrl: data.publicUrl };
   });
-
-  // SECURE SERVER ACTION: Increments the trust score
-  async function incrementLifesavers(id) {
-    "use server";
-    const { data } = await supabase.from('materials').select('lifesavers').eq('id', id).single();
-    await supabase.from('materials').update({ lifesavers: (data?.lifesavers || 0) + 1 }).eq('id', id);
-    revalidatePath(`/subjects/${slug}`);
-  }
 
   return (
     <main className="min-h-screen bg-[#F9F9F8] dark:bg-stone-950 text-stone-900 dark:text-stone-100 p-8 md:p-16 font-sans transition-colors duration-300">
@@ -43,15 +33,12 @@ export default async function SubjectPage({ params }) {
             {subjectName}
           </h1>
           <p className="text-stone-500 dark:text-stone-400 font-medium">
-            Files with the highest Trust Score 🛟 float to the top. Do not copy blindly without at least changing the font.
+            Accessing the batch archives. Reference these materials responsibly.
           </p>
         </header>
 
-        {/* PROPERLY PASSING THE PROPS */}
-        <MaterialDisplay 
-          initialMaterials={materialsWithUrls} 
-          upvoteAction={incrementLifesavers} 
-        />
+        {/* Removed upvoteAction prop */}
+        <MaterialDisplay initialMaterials={materialsWithUrls} />
 
       </div>
     </main>

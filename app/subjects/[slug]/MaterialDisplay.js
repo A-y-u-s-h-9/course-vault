@@ -1,16 +1,14 @@
 "use client";
 import { useState, useEffect } from 'react';
 
-export default function MaterialDisplay({ initialMaterials = [], upvoteAction }) {
-  const [materials, setMaterials] = useState(initialMaterials);
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [previewFile, setPreviewFile] = useState(null);
+export default function MaterialDisplay({ initialMaterials = [] }) {
+  const [materials] = useState(initialMaterials);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [showPreview, setShowPreview] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [codeContent, setCodeContent] = useState('');
-  const [upvotedItems, setUpvotedItems] = useState(new Set()); // Tracks what you clicked
-
-  const filteredMaterials = materials.filter(file => 
-    activeFilter === 'all' || file.category === activeFilter
-  );
 
   const getFileTypeCategory = (ext) => {
     const e = ext.toLowerCase();
@@ -20,140 +18,131 @@ export default function MaterialDisplay({ initialMaterials = [], upvoteAction })
     return 'unknown';
   };
 
-  useEffect(() => {
-    if (previewFile && getFileTypeCategory(previewFile.file_type) === 'code') {
-      fetch(previewFile.publicUrl)
-        .then(res => res.text())
-        .then(text => setCodeContent(text))
-        .catch(() => setCodeContent("Failed to load file. The server is crying."));
-    }
-  }, [previewFile]);
-
-  const handleUpvote = async (id) => {
-    if (upvotedItems.has(id)) return; // Prevent spamming
-    
-    // Optimistic UI update (feels instant)
-    setMaterials(materials.map(m => m.id === id ? { ...m, lifesavers: (m.lifesavers || 0) + 1 } : m));
-    setUpvotedItems(new Set([...upvotedItems, id]));
-    
-    // Tell the database
-    await upvoteAction(id);
+  const handlePreviewOpen = (file) => {
+    setSelectedFile(file);
+    setShowPreview(true);
+    setLoadingPreview(true);
   };
 
-  const categories = [
-    { id: 'all', label: 'All Files' },
-    { id: 'lab-report', label: 'Lab Reports' },
-    { id: 'lab-output', label: 'Lab Outputs / Code' },
-    { id: 'exam-prep', label: 'PYQs & Exam Prep' },
-    { id: 'notes', label: 'Notes' },
-    { id: 'assignment', label: 'Assignments' }
-  ];
+  useEffect(() => {
+    if (showPreview && selectedFile && getFileTypeCategory(selectedFile.file_type) === 'code') {
+      fetch(selectedFile.publicUrl)
+        .then(res => res.text())
+        .then(text => {
+          setCodeContent(text);
+          setLoadingPreview(false);
+        })
+        .catch(() => {
+          setCodeContent("Error loading code.");
+          setLoadingPreview(false);
+        });
+    }
+  }, [showPreview, selectedFile]);
+
+  const filteredMaterials = materials.filter(m => {
+    const matchesSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = activeCategory === 'all' || m.category === activeCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const holyTexts = filteredMaterials.filter(m => m.category === 'holy-text');
+  const communityArchives = filteredMaterials.filter(m => m.category !== 'holy-text');
 
   return (
-    <div>
-      {/* FILTERS */}
-      <div className="flex flex-wrap gap-2 mb-8 border-b border-stone-200 dark:border-stone-800 pb-6">
-        {categories.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveFilter(cat.id)}
-            className={`px-4 py-2 text-xs font-bold rounded-full transition-all ${
-              activeFilter === cat.id 
-                ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-md' 
-                : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border border-stone-200 dark:border-stone-800 hover:border-stone-400'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
+    <div className="space-y-8">
+      
+      {/* SEARCH & FILTERS BAR */}
+      <div className="sticky top-4 z-40 flex flex-col md:flex-row gap-4 p-4 bg-white/80 dark:bg-stone-950/80 backdrop-blur-xl border border-stone-200 dark:border-stone-800 rounded-2xl shadow-sm">
+        <div className="relative flex-1">
+          <input 
+            type="text"
+            placeholder="Search the archive..."
+            className="w-full pl-4 pr-4 py-2 bg-stone-100 dark:bg-stone-900 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+          {['all', 'lab-report', 'lab-output', 'assignment', 'notes', 'exam-prep'].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                activeCategory === cat 
+                ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900' 
+                : 'bg-stone-100 dark:bg-stone-900 text-stone-500 hover:bg-stone-200'
+              }`}
+            >
+              {cat.replace('-', ' ')}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* FILE LIST */}
-      <div className="space-y-4">
-        {filteredMaterials.map((file) => (
-          <div key={file.id} className="flex flex-col md:flex-row md:items-center justify-between p-5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl hover:border-stone-400 dark:hover:border-stone-500 transition-all shadow-sm gap-4">
-            
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-stone-100 dark:bg-stone-950 text-stone-500 dark:text-stone-400 rounded-lg flex flex-col items-center justify-center">
-                <span className="font-mono text-xs font-black">{file.file_type}</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-bold text-stone-900 dark:text-stone-100">{file.title}</h3>
-                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-sm">
-                    {file.category ? file.category.replaceAll('-', ' ') : 'General'}
-                  </span>
+      {/* HOLY TEXTS */}
+      {holyTexts.length > 0 && (
+        <section>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500 mb-6 flex items-center gap-3">
+            The Holy Texts 📜
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {holyTexts.map((file) => (
+              <div key={file.id} className="p-6 rounded-2xl bg-amber-50/50 dark:bg-amber-950/10 border-2 border-amber-200 dark:border-amber-900/30">
+                <h3 className="font-bold text-stone-900 dark:text-amber-100 mb-4">{file.title}</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => handlePreviewOpen(file)} className="flex-1 py-3 bg-amber-500 text-white text-[10px] font-black uppercase rounded-xl">Peek 👁️</button>
+                  <a href={file.publicUrl} download className="px-4 py-3 bg-blue-600 text-white rounded-xl">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  </a>
                 </div>
-                <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Uploaded: {new Date(file.created_at).toLocaleDateString()}
-                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* COMMUNITY ARCHIVES */}
+      <section>
+        <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-stone-400 mb-6">Collective Knowledge</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {communityArchives.map((file) => (
+            <div key={file.id} className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-blue-500/50 transition-all">
+              <div className="mb-4">
+                <span className="text-[9px] font-black text-blue-500 uppercase bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded mb-2 inline-block">
+                  {file.category.replace('-', ' ')}
+                </span>
+                <h3 className="font-bold text-stone-900 dark:text-stone-100 line-clamp-1">{file.title}</h3>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handlePreviewOpen(file)} className="flex-1 py-2.5 bg-stone-100 dark:bg-stone-800 hover:bg-amber-500 hover:text-white text-stone-600 dark:text-stone-300 text-[10px] font-black uppercase rounded-xl transition-all">Peek 👁️</button>
+                <a href={file.publicUrl} download className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </a>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              {/* Trust Score Button */}
-              <button 
-                onClick={() => handleUpvote(file.id)}
-                disabled={upvotedItems.has(file.id)}
-                className={`px-3 py-2 flex items-center gap-2 text-sm font-bold rounded-lg transition-colors border ${
-                  upvotedItems.has(file.id) 
-                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50' 
-                  : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800'
-                }`}
-              >
-                🛟 {file.lifesavers || 0}
-              </button>
-
-              <button 
-                onClick={() => setPreviewFile(file)}
-                className="px-4 py-2 bg-stone-100 dark:bg-stone-950 hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-sm font-bold rounded-lg transition-colors"
-              >
-                Peek 👁️
-              </button>
-              
-              <a 
-                href={file.publicUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors"
-              >
-                Get File
-              </a>
-            </div>
-          </div>
-        ))}
-
-        {filteredMaterials.length === 0 && (
-          <div className="text-center py-20 text-stone-400 dark:text-stone-600 font-medium border border-dashed border-stone-300 dark:border-stone-800 rounded-xl">
-            No materials found. We are flying blind.
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      </section>
 
       {/* PREVIEW MODAL */}
-      {previewFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-stone-900/80 backdrop-blur-sm">
-          <div className="bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-4 border-b border-stone-200 dark:border-stone-800 bg-[#F9F9F8] dark:bg-stone-900">
-              <div>
-                <h3 className="font-black text-lg">{previewFile.title}</h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <a href={previewFile.publicUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline">Download</a>
-                <button onClick={() => setPreviewFile(null)} className="p-2 bg-stone-200 dark:bg-stone-800 hover:bg-red-500 hover:text-white rounded-lg transition-colors text-stone-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-              </div>
+      {showPreview && selectedFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-stone-950/90 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-stone-950 w-full max-w-6xl h-[85vh] rounded-[2rem] flex flex-col overflow-hidden border border-stone-200 dark:border-stone-800">
+            <div className="p-5 border-b dark:border-stone-800 flex justify-between items-center">
+              <h3 className="font-bold text-stone-900 dark:text-stone-100 text-lg">{selectedFile.title}</h3>
+              <button onClick={() => setShowPreview(false)} className="w-10 h-10 flex items-center justify-center bg-stone-100 dark:bg-stone-800 rounded-full">✕</button>
             </div>
-            <div className="flex-1 overflow-auto bg-stone-100 dark:bg-stone-950 p-4">
-              {getFileTypeCategory(previewFile.file_type) === 'pdf' && <iframe src={`${previewFile.publicUrl}#toolbar=0`} className="w-full h-full rounded-lg border-0 bg-white" />}
-              {getFileTypeCategory(previewFile.file_type) === 'image' && <img src={previewFile.publicUrl} className="max-w-full max-h-full mx-auto rounded-lg" />}
-              {getFileTypeCategory(previewFile.file_type) === 'code' && (
-                <div className="w-full h-full rounded-lg bg-[#1E1E1E] p-4 relative overflow-auto">
-                  <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap">{codeContent}</pre>
+            <div className="flex-1 bg-stone-100 dark:bg-stone-950 p-4 relative">
+              {loadingPreview && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-100 dark:bg-stone-950">
+                  <div className="w-8 h-8 border-4 border-t-amber-500 rounded-full animate-spin"></div>
                 </div>
               )}
+              <div className="w-full h-full rounded-2xl overflow-hidden border bg-white dark:bg-stone-900">
+                {getFileTypeCategory(selectedFile.file_type) === 'pdf' && <iframe src={`${selectedFile.publicUrl}#toolbar=0`} className="w-full h-full border-0" onLoad={() => setLoadingPreview(false)} />}
+                {getFileTypeCategory(selectedFile.file_type) === 'image' && <div className="h-full flex items-center justify-center"><img src={selectedFile.publicUrl} className="max-h-full rounded" onLoad={() => setLoadingPreview(false)} /></div>}
+                {getFileTypeCategory(selectedFile.file_type) === 'code' && <div className="bg-black p-8 h-full overflow-auto font-mono text-sm text-emerald-400"><pre>{codeContent}</pre></div>}
+              </div>
             </div>
           </div>
         </div>
