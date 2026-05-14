@@ -8,8 +8,15 @@ export const dynamic = 'force-dynamic';
 export default async function HQPage() {
   // Fetch files
   const { data: materials } = await supabase.from('materials').select('*').order('created_at', { ascending: false });
-  const pending = materials?.filter(m => m.status === 'pending') || [];
-  const approved = materials?.filter(m => m.status === 'approved') || [];
+  
+  // Attach public URLs so you can view them in HQ
+  const materialsWithUrls = (materials || []).map(file => {
+    const { data } = supabase.storage.from('vault').getPublicUrl(file.file_path);
+    return { ...file, publicUrl: data.publicUrl };
+  });
+
+  const pending = materialsWithUrls.filter(m => m.status === 'pending');
+  const approved = materialsWithUrls.filter(m => m.status === 'approved');
 
   // Fetch active dooms
   const { data: dooms } = await supabase.from('dooms').select('*').order('created_at', { ascending: true });

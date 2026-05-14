@@ -1,121 +1,154 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function HQFileRow({ file, serverAction }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [codeContent, setCodeContent] = useState('');
 
-  // Wrapper function to close the edit form automatically after saving
-  const onSubmit = async (formData) => {
-    await serverAction(formData);
-    setIsEditing(false);
+  const getFileTypeCategory = (ext) => {
+    const e = ext.toLowerCase();
+    if (['pdf'].includes(e)) return 'pdf';
+    if (['png', 'jpg', 'jpeg'].includes(e)) return 'image';
+    if (['txt', 'm', 'c', 'cpp', 'py', 'js', 'ino'].includes(e)) return 'code';
+    return 'unknown';
   };
 
-  // ==========================================
-  // EDIT MODE UI
-  // ==========================================
-  if (isEditing) {
-    return (
-      <div className="p-5 bg-white dark:bg-stone-900 border-2 border-blue-200 dark:border-blue-900/50 rounded-xl shadow-md mb-3 transition-all">
-        <form action={onSubmit} className="flex flex-col gap-4">
-          <input type="hidden" name="id" value={file.id} />
-          <input type="hidden" name="actionType" value="edit" />
+  useEffect(() => {
+    if (showPreview && getFileTypeCategory(file.file_type) === 'code') {
+      fetch(file.publicUrl).then(res => res.text()).then(text => setCodeContent(text));
+    }
+  }, [showPreview, file]);
 
-          <div>
-            <label className="text-xs font-bold text-stone-500 uppercase tracking-wide">Edit Title</label>
-            <input 
-              type="text" 
-              name="title" 
-              defaultValue={file.title} 
-              required 
-              className="w-full mt-1 p-2 border border-stone-200 dark:border-stone-800 rounded-lg text-sm bg-[#F9F9F8] dark:bg-stone-950 focus:outline-none focus:border-blue-500" 
-            />
+  return (
+    <div className="group border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 hover:bg-stone-50 dark:hover:bg-stone-900/40 transition-colors">
+      <form action={serverAction} className="p-3">
+        <input type="hidden" name="id" value={file.id} />
+        <input type="hidden" name="filePath" value={file.file_path} />
+
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          
+          {/* Active Status Pulse */}
+          <div className={`w-2 h-2 rounded-full shrink-0 ${file.status === 'pending' ? 'bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`} />
+
+          {/* Metadata */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold truncate text-stone-900 dark:text-stone-200">{file.title}</h3>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-stone-500 border border-stone-200 dark:border-stone-700 uppercase">
+                {file.file_type}
+              </span>
+            </div>
+            <p className="text-[10px] text-stone-400 font-bold uppercase tracking-widest truncate">{file.subject.replaceAll('-', ' ')}</p>
           </div>
 
-          <div>
-            <label className="text-xs font-bold text-stone-500 uppercase tracking-wide">Change Subject</label>
-            <select 
-              name="subject" 
-              defaultValue={file.subject} 
-              className="w-full mt-1 p-2 border border-stone-200 dark:border-stone-800 rounded-lg text-sm bg-[#F9F9F8] dark:bg-stone-950 focus:outline-none focus:border-blue-500"
-            >
-              <option value="analog-and-digital-communication">Analog & Digital Communication</option>
-              <option value="digital-signal-processing">Digital Signal Processing</option>
-              <option value="em-theory-and-transmission-lines">EM Theory & Transmission Lines</option>
-              <option value="control-systems">Control Systems</option>
-              <option value="advanced-numerical-methods">Advanced Numerical Methods</option>
-              <option value="electronic-devices">Electronic Devices</option>
-              <option value="environmental-sciences">Environmental Sciences</option>
-              <option value="all-subjects">All Subjects / General</option> {/* NEW */}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2 mt-2 pt-4 border-t border-stone-100 dark:border-stone-800">
+          {/* Color-Coded Controls */}
+          <div className="flex items-center gap-2">
+            
             <input 
               type="password" 
               name="secretKey" 
-              placeholder="Master Key..." 
+              placeholder="KEY" 
               required 
-              className="flex-1 px-3 py-2 text-sm border border-stone-300 dark:border-stone-700 rounded-lg bg-white dark:bg-stone-950 focus:outline-none" 
+              className="w-16 px-2 py-1 text-[10px] border border-stone-200 dark:border-stone-800 rounded bg-white dark:bg-stone-900 focus:outline-none focus:ring-1 focus:ring-red-500 transition-all font-mono"
             />
-            <button 
-              type="button" 
-              onClick={() => setIsEditing(false)} 
-              className="px-4 py-2 text-sm font-bold text-stone-600 dark:text-stone-400 bg-stone-100 dark:bg-stone-900 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" 
-              className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              Save Changes
-            </button>
+
+            <div className="flex items-center gap-1.5 ml-2">
+              {/* Preview Button - Amber */}
+              <button 
+                type="button" 
+                onClick={() => setShowPreview(true)} 
+                className="p-1.5 text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-all active:scale-90" 
+                title="View"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              </button>
+
+              {/* Edit Toggle - Indigo */}
+              <button 
+                type="button" 
+                onClick={() => setIsEditing(!isEditing)} 
+                className={`p-1.5 rounded transition-all active:scale-90 ${isEditing ? 'text-white bg-indigo-600 shadow-sm' : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}`}
+                title="Edit"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </button>
+
+              {/* Approve Button - Emerald */}
+              {file.status === 'pending' && (
+                <button 
+                  type="submit" 
+                  name="actionType" 
+                  value="approve" 
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-tighter rounded shadow-sm hover:shadow-emerald-900/20 transition-all active:translate-y-px"
+                >
+                  Approve
+                </button>
+              )}
+
+              {/* Delete Button - Rose/Red */}
+              <button 
+                type="submit" 
+                name="actionType" 
+                value="delete" 
+                className="p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded transition-all active:scale-90"
+                title="Delete"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
           </div>
-        </form>
-      </div>
-    );
-  }
+        </div>
 
-  // ==========================================
-  // STANDARD ROW UI
-  // ==========================================
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg shadow-sm mb-3 gap-4">
-      <div>
-        <h3 className="font-bold text-sm">{file.title}</h3>
-        <p className="text-xs text-stone-500 capitalize">{file.subject.replaceAll('-', ' ')} • {file.file_type}</p>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        <form action={serverAction} className="flex items-center gap-2">
-          <input type="hidden" name="id" value={file.id} />
-          <input type="hidden" name="filePath" value={file.file_path} />
-          
-          <input 
-            type="password" 
-            name="secretKey" 
-            placeholder="Key..." 
-            required 
-            className="w-20 px-2 py-1.5 text-xs border border-stone-300 dark:border-stone-700 rounded bg-transparent focus:outline-none"
-          />
-          
-          {file.status === 'pending' ? (
-            <>
-              <button type="submit" name="actionType" value="approve" className="px-3 py-1.5 text-xs font-bold text-green-700 bg-green-100 rounded hover:bg-green-200">Approve</button>
-              <button type="submit" name="actionType" value="reject" className="px-3 py-1.5 text-xs font-bold text-red-700 bg-red-100 rounded hover:bg-red-200">Reject</button>
-            </>
-          ) : (
-            <button type="submit" name="actionType" value="delete" className="px-3 py-1.5 text-xs font-bold text-red-700 bg-red-100 rounded hover:bg-red-200">Incinerate</button>
-          )}
-        </form>
+        {/* Edit Drawer */}
+        {isEditing && (
+          <div className="mt-3 p-3 bg-indigo-50/30 dark:bg-indigo-900/10 rounded border border-indigo-100 dark:border-indigo-800/50 grid grid-cols-1 sm:grid-cols-3 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <input type="text" name="title" defaultValue={file.title} className="p-2 text-xs border border-indigo-200 dark:border-indigo-800 rounded dark:bg-stone-950 outline-none focus:border-indigo-500" />
+            <select name="subject" defaultValue={file.subject} className="p-2 text-xs border border-indigo-200 dark:border-indigo-800 rounded dark:bg-stone-950 outline-none">
+                <option value="analog-and-digital-communication">Analog Comm</option>
+                <option value="digital-signal-processing">DSP</option>
+                <option value="em-theory-and-transmission-lines">EM Theory</option>
+                <option value="control-systems">Control Systems</option>
+                <option value="advanced-numerical-methods">Numerical</option>
+                <option value="electronic-devices">EDC</option>
+                <option value="environmental-sciences">Env Sc</option>
+                <option value="all-subjects">General</option>
+            </select>
+            <div className="flex gap-2">
+              <select name="category" defaultValue={file.category} className="flex-1 p-2 text-xs border border-indigo-200 dark:border-indigo-800 rounded dark:bg-stone-950 outline-none">
+                  <option value="holy-text">Official</option>
+                  <option value="lab-report">Lab Report</option>
+                  <option value="lab-output">Code</option>
+                  <option value="assignment">Assignment</option>
+                  <option value="notes">Notes</option>
+                  <option value="exam-prep">PYQ</option>
+              </select>
+              <button type="submit" name="actionType" value="edit" className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase rounded shadow-sm">Update</button>
+            </div>
+          </div>
+        )}
+      </form>
 
-        <button 
-          onClick={() => setIsEditing(true)} 
-          className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
-        >
-          Edit
-        </button>
-      </div>
+      {/* Modal remains same for consistency */}
+      {showPreview && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 bg-stone-950/90 backdrop-blur-sm">
+          <div className="bg-white dark:bg-stone-950 w-full max-w-5xl h-[95vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-stone-200 dark:border-stone-800">
+            <div className="p-3 border-b flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em] text-stone-500 bg-stone-50 dark:bg-stone-900">
+              <span>Previewing: {file.title}</span>
+              <button onClick={() => setShowPreview(false)} className="w-8 h-8 flex items-center justify-center hover:bg-red-500 hover:text-white rounded-lg transition-colors">✕</button>
+            </div>
+            <div className="flex-1 bg-stone-100 dark:bg-stone-900 p-2 overflow-hidden">
+              {getFileTypeCategory(file.file_type) === 'pdf' && <iframe src={`${file.publicUrl}#toolbar=0`} className="w-full h-full rounded border-0" />}
+              {getFileTypeCategory(file.file_type) === 'image' && <div className="h-full flex items-center justify-center bg-stone-200 dark:bg-stone-800 rounded"><img src={file.publicUrl} className="max-h-full rounded shadow-lg" /></div>}
+              {getFileTypeCategory(file.file_type) === 'code' && (
+                <div className="bg-black p-4 h-full overflow-auto rounded font-mono text-xs border border-stone-800">
+                  <pre className="text-emerald-500 drop-shadow-[0_0_5px_rgba(16,185,129,0.3)]">{codeContent}</pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
