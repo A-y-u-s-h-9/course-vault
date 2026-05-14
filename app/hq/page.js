@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import HQFileRow from './HQFileRow'; 
 
+export const dynamic = 'force-dynamic';
+
 export default async function HQPage() {
   // Fetch files
   const { data: materials } = await supabase.from('materials').select('*').order('created_at', { ascending: false });
